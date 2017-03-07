@@ -16,8 +16,6 @@ using namespace std;
 static int angle_tolerance_astar = 15;
 
 static int angle_steps_total = 360 / angle_tolerance_astar;
-
-
 static int moves_possible = 4; // front , back and turn right 15 degrees, turn left 15 degrees
 
 static int x_moves[moves_possible]={0,0,0,0};
@@ -34,7 +32,7 @@ class node_a_star
     int angle_cord;
     int G_val;
     int F_val;
-    int angle_tolerance_astar;  
+    int angle_tolerance_astar; 
 
     public:
         node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start) 
@@ -50,7 +48,7 @@ class node_a_star
 
         void updateF(const int target_x, const int target_y, const int target_angle_yaw)
         {
-             F_val=G_val+get_h_val(target_x, target_y, target_angle_yaw)*10; //A*
+            F_val=G_val+get_h_val(target_x, target_y, target_angle_yaw)*10; //A*
         }
 
         // give better priority to going strait instead of diagonally
@@ -73,7 +71,6 @@ class node_a_star
 
             if (target_angle_yaw >= angle_cord)
             {   // condition is if target angle is greater than starting
-
                 distance_angle_opposite = (360 - target_angle_yaw) +  angle_cord;
                 if( distance_angle_opposite < (target_angle_yaw - angle_cord) )
                 {
@@ -93,7 +90,6 @@ class node_a_star
                 }
             }
             
-
 
             // Euclidian Distance
             //d=static_cast<int>(sqrt(xd*xd+yd*yd));
@@ -124,6 +120,7 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
     static node* n0;
     static node* m0;
     static int i, j, x_nodes_astar, y_nodes_astar, angle_node_astar, angle_index_nodes_astar, x_next_child, y_next_child, angle_next_child;
+    static int action_taken_step, action_backwards;
     static char c;
 
 
@@ -177,24 +174,44 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
         a_star_closed_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar]=1;
 
         // quit searching when the goal state is reached
-        //if((*n0).estimate(xFinish, yFinish) == 0)
-        if(x_nodes_astar==GoalPosX && y_nodes_astar==GoalPosY && angle_node_astar==GoalPosYaw_discritized) 
+        // if((*n0).estimate(xFinish, yFinish) == 0)
+        if( x_nodes_astar==GoalPosX && y_nodes_astar==GoalPosY && angle_node_astar==GoalPosYaw_discritized ) 
         {
             std::cout << " GoalPosX and GoalPosY reached \n";
-
 
             // generate the path from finish to start
             // by following the directions
             string path="";
             while(!(x_nodes_astar==StartPosX && y_nodes_astar==StartPosY && angle_node_astar==StartPosYaw_discritized ))
             {
-                // TODO :  correct below... it begins from goal till start
-                j=dir_map[x][y];
-                c='0'+(j+dir/2)%dir;
+                // 
+                // the action that was taken to reach this node
+                action_taken_step = a_star_action_history[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar];
+                if (action_taken_step == 0)
+                {   // robot would have moved upwards ... the parent node is then one downwards
+                    c = '0'+1;
+                    action_backwards = 1;
+                } else if (action_taken_step == 1)
+                {   // robot would have moved downwards ... the parent node is then one upwards
+                    c = '0'+0;
+                    action_backwards = 0;
+                } else if (action_taken_step == 2)
+                {   // robot would have rotated right ... the parent node is then one rotation left
+                    c = '0'+3;
+                    action_backwards = 3;
+                } else if (action_taken_step == 3)
+                {   // robot would have rotated right ... the parent node is then one rotation left
+                    c = '0'+2;
+                    action_backwards = 2;
+                } 
+
                 path=c+path;
-                x+=dx[j];
-                y+=dy[j];
-                // till here
+                x_nodes_astar += x_moves[action_backwards];
+                y_nodes_astar += y_moves[action_backwards];
+                angle_node_astar = ( angle_node_astar + angle_moves[i] ) % 360;
+                if(angle_node_astar < 0)
+                {   angle_node_astar = (angle_node_astar + 360) % 360;  }
+                // 
             }
 
             // garbage collection
@@ -240,7 +257,7 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
                 else if(a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar] > m0->getF())
                 {
                     // update the priority info
-                    (a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar] = m0->getF();
+                    a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar] = m0->getF();
                     // save the action taken at this step 
                     a_star_action_history[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar]=i;
 
@@ -250,9 +267,8 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
                     // and the new node will be pushed in instead
 
 
-                    while(!(pq[pqi].top().getx()==x_nodes_astar && 
-                           pq[pqi].top().gety()==y_nodes_astar  && 
-                           pq[pqi].top().getangle()==angle_index_nodes_astar ))
+                    while(!(pq[pqi].top().getx()==x_nodes_astar && pq[pqi].top().gety()==y_nodes_astar && 
+                        pq[pqi].top().getangle()==angle_index_nodes_astar ))
                     {                
                         pq[1-pqi].push(pq[pqi].top());
                         pq[pqi].pop();       
@@ -278,92 +294,6 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
 
     return ""; // no route found
 }
-
-int main()
-{
-    srand(time(NULL));
-
-    // create empty map
-    for(int y=0;y<m;y++)
-    {
-        for(int x=0;x<n;x++) map[x][y]=0;
-    }
-
-    // fillout the map matrix with a '+' pattern
-    for(int x=n/8;x<n*7/8;x++)
-    {
-        map[x][m/2]=1;
-    }
-    for(int y=m/8;y<m*7/8;y++)
-    {
-        map[n/2][y]=1;
-    }
-    
-    // randomly select start and finish locations
-    int xA, yA, xB, yB;
-    switch(rand()%8)
-    {
-        case 0: xA=0;yA=0;xB=n-1;yB=m-1; break;
-        case 1: xA=0;yA=m-1;xB=n-1;yB=0; break;
-        case 2: xA=n/2-1;yA=m/2-1;xB=n/2+1;yB=m/2+1; break;
-        case 3: xA=n/2-1;yA=m/2+1;xB=n/2+1;yB=m/2-1; break;
-        case 4: xA=n/2-1;yA=0;xB=n/2+1;yB=m-1; break;
-        case 5: xA=n/2+1;yA=m-1;xB=n/2-1;yB=0; break;
-        case 6: xA=0;yA=m/2-1;xB=n-1;yB=m/2+1; break;
-        case 7: xA=n-1;yA=m/2+1;xB=0;yB=m/2-1; break;
-    }
-
-    cout<<"Map Size (X,Y): "<<n<<","<<m<<endl;
-    cout<<"Start: "<<xA<<","<<yA<<endl;
-    cout<<"Finish: "<<xB<<","<<yB<<endl;
-    // get the route
-    clock_t start = clock();
-    string route=pathFind(xA, yA, xB, yB);
-    if(route=="") cout<<"An empty route generated!"<<endl;
-    clock_t end = clock();
-    double time_elapsed = double(end - start);
-    cout<<"Time to calculate the route (ms): "<<time_elapsed<<endl;
-    cout<<"Route:"<<endl;
-    cout<<route<<endl<<endl;
-
-    // follow the route on the map and display it 
-    if(route.length()>0)
-    {
-        int j; char c;
-        int x=xA;
-        int y=yA;
-        map[x][y]=2;
-        for(int i=0;i<route.length();i++)
-        {
-            c =route.at(i);
-            j=atoi(&c); 
-            x=x+dx[j];
-            y=y+dy[j];
-            map[x][y]=3;
-        }
-        map[x][y]=4;
-    
-        // display the map with the route
-        for(int y=0;y<m;y++)
-        {
-            for(int x=0;x<n;x++)
-                if(map[x][y]==0)
-                    cout<<".";
-                else if(map[x][y]==1)
-                    cout<<"O"; //obstacle
-                else if(map[x][y]==2)
-                    cout<<"S"; //start
-                else if(map[x][y]==3)
-                    cout<<"R"; //route
-                else if(map[x][y]==4)
-                    cout<<"F"; //finish
-            cout<<endl;
-        }
-    }
-    getchar(); // wait for a (Enter) keypress  
-    return(0);
-}
-
 
 
 
