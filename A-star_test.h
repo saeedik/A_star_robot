@@ -1,7 +1,6 @@
 #ifndef A_START_TEST_H_
 #define A_START_TEST_H_
 
-
 #include <iostream>
 #include <iomanip>
 #include <queue>
@@ -10,8 +9,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstdio>
-using namespace std;
 
+using namespace std;
 
 static int angle_tolerance_astar = 15;
 
@@ -30,9 +29,9 @@ class node_a_star
     int x_cord;
     int y_cord;
     int angle_cord;
+    // variables for A STAR
     int G_val;
     int F_val;
-    int angle_tolerance_astar; 
 
     public:
         node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start) 
@@ -118,6 +117,7 @@ string pathFind( const int StartPosX, const int StartPosY, const double StartPos
     static priority_queue<node_a_star> pq[2]; // list of open (not-yet-tried) nodes
     static int pqi=0; // pq index
     static node* n0;
+    static node* n0start;
     static node* m0;
     static int i, j, x_nodes_astar, y_nodes_astar, angle_node_astar, angle_index_nodes_astar, x_next_child, y_next_child, angle_next_child;
     static int action_taken_step, action_backwards;
