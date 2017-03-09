@@ -16,6 +16,19 @@
 
 
 
+
+namespace motion_primitives_global_planner
+{
+//register this planner as a BaseGlobalPlanner plugin
+PLUGINLIB_EXPORT_CLASS(motion_primitives_global_planner::MotionPrimitivesGlobalPlanner, nav_core::BaseGlobalPlanner)
+//PLUGINLIB_EXPORT_CLASS(motion_primitives_global_planner::node_a_star, nav_core::BaseGlobalPlanner)
+
+
+
+
+	node_a_star::node_a_star() 
+    	{x_cord=0; y_cord=0; G_val=0; F_val=0; angle_cord=0; angle_tolerance_node = 15; }
+
     node_a_star::node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start) 
     	{x_cord=xpos; y_cord=ypos; G_val=g_start; F_val=f_start; angle_cord=angle_pos; angle_tolerance_node = 15; }
 
@@ -89,10 +102,13 @@
 	}
 
 
-namespace motion_primitives_global_planner
-{
-//register this planner as a BaseGlobalPlanner plugin
-PLUGINLIB_EXPORT_CLASS(motion_primitives_global_planner::MotionPrimitivesGlobalPlanner, nav_core::BaseGlobalPlanner)
+
+
+
+
+
+
+
 
 MotionPrimitivesGlobalPlanner::MotionPrimitivesGlobalPlanner() {
 
@@ -315,24 +331,20 @@ bool MotionPrimitivesGlobalPlanner::makePlan(const geometry_msgs::PoseStamped& s
 
 
 
-	////// just testing
 	std::cout << "\n Testing here orientation =  \n" << goal.pose.orientation;
 	double yaw_rob_goal = tf::getYaw(goal.pose.orientation);
-	double yaw_degrees = yaw_rob_goal * 180.0 / M_PI; // conversion to degrees
-	if( yaw_degrees < 0 ) yaw_degrees += 360.0; // convert negative to positive angles
-	std::cout << "\n   ... and yaw =   " << yaw_degrees << std::endl;
+	double yaw_degrees_goal = yaw_rob_goal * 180.0 / M_PI; // conversion to degrees
+	if( yaw_degrees_goal < 0 ) yaw_degrees_goal += 360.0; // convert negative to positive angles
+	std::cout << "\n   ... and yaw goal =   " << yaw_degrees_goal << std::endl;
+
+	// degrees 
+	double yaw_rob_start = tf::getYaw(start.pose.orientation);
+	double yaw_degrees_start = yaw_rob_start * 180.0 / M_PI; // conversion to degrees
+	if( yaw_degrees_start < 0 ) yaw_degrees_start += 360.0; // convert negative to positive angles
+	std::cout << "\n   ... and yaw start =   " << yaw_degrees_start << std::endl;
  	//geometry_msgs::Quaternion q_from_yaw = tf::createQuaternionMsgFromYaw(yaw_rob);
+
  	std::cout << "\n Testing ENDING ! \n";
- 	///// testing testing
-
-
-
-
-
-
-
-
-
 
 
 
@@ -376,7 +388,7 @@ bool MotionPrimitivesGlobalPlanner::makePlan(const geometry_msgs::PoseStamped& s
 
 	// now returning a plan
 	/////////////////  Just testing
-	plan.push_back(start);
+	/*plan.push_back(start);
    	for (int i=0; i<20; i++){
      geometry_msgs::PoseStamped new_goal = goal;
      tf::Quaternion goal_quat = tf::createQuaternionFromYaw(1.54);
@@ -392,6 +404,15 @@ bool MotionPrimitivesGlobalPlanner::makePlan(const geometry_msgs::PoseStamped& s
    	plan.push_back(new_goal);
    	}
    	plan.push_back(goal);
+
+
+	*/
+
+
+
+   	std::string gottheplan = PathFindAStar(  (int) mymx, (int) mymy, yaw_degrees_start, (int) goalmyx , (int) goalmyy, yaw_degrees_goal );
+   	std::cout << "\n\n\n\nThe Plan was = " << gottheplan << std::endl;
+
   	return true;
 
 }
@@ -542,6 +563,15 @@ std::string MotionPrimitivesGlobalPlanner::PathFindAStar( const int StartPosX, c
     GoalPosYaw_discritized = ( ((GoalPosYaw_discritized + angle_tolerance_astar/2) / angle_tolerance_astar) * angle_tolerance_astar ) % 360;
 
 
+
+
+
+
+    std::cout << "\n In PathFinder\nStartPosYaw_discritized = " << StartPosYaw_discritized << ":  and GoalPosYaw_discritized = " <<  GoalPosYaw_discritized << std::endl;
+    std::cout << "\n In PathFinder\nStartPosX = " << StartPosX <<  "  StartPosY = " << StartPosY << "  GoalPosX = " << GoalPosX << "  GoalPosY = " << GoalPosY << " StartPosYaw = " << StartPosYaw << "  GoalPosYaw = " << GoalPosYaw << std::endl;
+
+
+
     // Here n = costmap_ros->getCostmap()->getSizeInCellsX() 
     // m = costmap_ros->getCostmap()->getSizeInCellsY() 
     /*
@@ -568,7 +598,7 @@ std::string MotionPrimitivesGlobalPlanner::PathFindAStar( const int StartPosX, c
 	std::vector<std::vector<std::vector<int> > > a_star_action_history(mymap_x_size, std::vector<std::vector<int> > (mymap_y_size, std::vector<int>(angle_steps_total,0)));
 
 
-    	static int x_moves[] = {0,0,0,0};
+    static int x_moves[] = {0,0,0,0};
 	static int y_moves[] = {1,-1,0,0};
 	static int angle_moves[] = {0,0,angle_tolerance_astar,-1*angle_tolerance_astar};
 
@@ -585,6 +615,9 @@ std::string MotionPrimitivesGlobalPlanner::PathFindAStar( const int StartPosX, c
     {
         // get the current node w/ the highest priority
         // from the list of open nodes
+
+    	std::cout << "\n In While ";
+
 
         n0=new node_a_star( pq[pqi].top().getx(), pq[pqi].top().gety(), pq[pqi].top().getangle(), pq[pqi].top().getG(), pq[pqi].top().getF());
 
@@ -653,6 +686,18 @@ std::string MotionPrimitivesGlobalPlanner::PathFindAStar( const int StartPosX, c
             angle_next_child = ( angle_node_astar + angle_moves[i] ) % 360;
             if(angle_next_child < 0)
             {   angle_next_child = (angle_next_child + 360) % 360;  }
+
+
+
+
+            std::cout << "\n In possible moves : " << i <<  "x_nodes_astar = " << x_nodes_astar << ":  and x_next_child = " <<  x_next_child;
+            std::cout <<  ":  and y_nodes_astar = " <<  y_nodes_astar << ":  and y_next_child = " <<  y_next_child << " and angle_node_astar = " << angle_node_astar;
+            std::cout <<  ":  and angle_next_child = " <<  angle_next_child << std::endl;
+
+
+
+
+
 
             // TODO: here send the x and y coordinates of the possible robot position to the file MotionPrimitiesGlobalPlanner.cpp 
             // use MotionPrimitivesGlobalPlanner::give_robot_cells_from_map_coordinates(x_next_child,y_next_child,angle_next_child) to get cells occupied by the robot and then 
