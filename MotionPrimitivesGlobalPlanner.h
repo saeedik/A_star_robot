@@ -19,11 +19,26 @@
 #include <vector>
 
 
-// Node of A star
+
+
+namespace motion_primitives_global_planner
+{
+/*
+class cmp
+{
+	public:
+	    bool operator()(const node_a_star& node_compare_one, const node_a_star& node_compare_two);
+
+};
+*/
+
+
+
 class node_a_star
 {
 
     public:
+    	node_a_star();
         node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start);
         virtual ~node_a_star();
     
@@ -59,18 +74,6 @@ class node_a_star
 
 
 
-
-
-namespace motion_primitives_global_planner
-{
-/*
-class cmp
-{
-	public:
-	    bool operator()(const node_a_star& node_compare_one, const node_a_star& node_compare_two);
-
-};
-*/
 class MotionPrimitivesGlobalPlanner: public nav_core::BaseGlobalPlanner
 {
 public:
@@ -122,9 +125,9 @@ private:
 
 
 	// variables for A star below ... these will be initialized in initialization func 
-	static int angle_tolerance_astar;
+	int angle_tolerance_astar;
 	int angle_steps_total;
-	static int moves_possible;
+	int moves_possible;
 
 	/*
 	static int* x_moves;
