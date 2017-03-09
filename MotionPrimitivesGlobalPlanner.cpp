@@ -12,6 +12,83 @@
 
 #include <pluginlib/class_list_macros.h>
 #include "motion_primitives_global_planner/MotionPrimitivesGlobalPlanner.h"
+
+
+
+
+    node_a_star::node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start) 
+    	{x_cord=xpos; y_cord=ypos; G_val=g_start; F_val=f_start; angle_cord=angle_pos; angle_tolerance_node = 15; }
+
+    node_a_star::~node_a_star() { }
+    
+    int node_a_star::getx()  const {return x_cord;}
+    int node_a_star::gety()  const {return y_cord;}        
+    int node_a_star::getangle()  const {return angle_cord;}
+    int node_a_star::getG()  const  {return G_val;}
+    int node_a_star::getF()  const {return F_val;}
+
+    void node_a_star::updateF(const int target_x, const int target_y, const int target_angle_yaw)
+    {	F_val=G_val+get_h_val(target_x, target_y, target_angle_yaw)*10; //A*
+    }
+
+    // give better priority to going strait instead of diagonally
+    void node_a_star::nextG(const int intended_dir) 
+    {
+        // TODO: here I have to change G value accorind to the movements forward, backward and rotation.. For now all are 10 
+        G_val += 10;
+    }
+        
+    // Estimation function for the remaining distance to the goal.
+    int node_a_star::get_h_val(const int x_tgt, const int y_tgt, const int target_angle_yaw)  const
+    {
+        static int xd, yd, d;
+        static int ad;
+        xd=x_tgt-x_cord;
+        yd=y_tgt-y_cord;  
+
+		static int distance_angle_opposite;
+
+        if (target_angle_yaw >= angle_cord)
+        {   // condition is if target angle is greater than starting
+            distance_angle_opposite = (360 - target_angle_yaw) +  angle_cord;
+            if( distance_angle_opposite < (target_angle_yaw - angle_cord) )
+            {
+            	ad = distance_angle_opposite / angle_tolerance_node;
+            } else {
+                // simple distance from goal to start  div by angle tolerance
+                ad = (target_angle_yaw -  angle_cord) / angle_tolerance_node;
+            }
+        } else {
+            distance_angle_opposite = (360 - angle_cord) +  target_angle_yaw;
+            if( distance_angle_opposite < (angle_cord - target_angle_yaw) )
+            {
+                ad = distance_angle_opposite / angle_tolerance_node;
+            } else {
+                // simple distance from start to goal div by angle tolerance
+                ad = (angle_cord -  target_angle_yaw) / angle_tolerance_node;
+            }
+        }
+            
+            // Euclidian Distance
+            //d=static_cast<int>(sqrt(xd*xd+yd*yd));
+
+            //Manhattan distance + angular steps needed
+            d=static_cast<int>( abs(xd)+abs(yd) + ad );
+            return d;
+    }
+
+    /*
+    bool node_a_star::operator< (const node_a_star& node_compare_one, const node_a_star& node_compare_two)
+    {
+    	return node_compare_one.getF() > node_compare_two.getF();
+    }
+	*/
+	bool node_a_star::operator<(const node_a_star& node_first_cmp) const
+	{
+		return F_val > node_first_cmp.getF();
+	}
+
+
 namespace motion_primitives_global_planner
 {
 //register this planner as a BaseGlobalPlanner plugin
@@ -22,6 +99,16 @@ MotionPrimitivesGlobalPlanner::MotionPrimitivesGlobalPlanner() {
 }
 
 MotionPrimitivesGlobalPlanner::~MotionPrimitivesGlobalPlanner() {
+
+	/*
+	if(x_moves) // True if x_moves is not a null pointer
+    	delete[] x_moves; 
+    if(y_moves) // True if x_moves is not a null pointer
+    	delete[] y_moves; 
+    if(angle_moves) // True if x_moves is not a null pointer
+    	delete[] angle_moves; 
+	*/
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,6 +409,20 @@ void MotionPrimitivesGlobalPlanner::initialize(std::string name,
 	// .......... just saving the pointer in the class so that I may be ableto use the cost_mapinother functions
 	mycostmap_ros = costmap_ros;
 
+
+	// variables for A star below
+	angle_tolerance_astar = 15;
+	angle_steps_total = 360 / angle_tolerance_astar;
+	moves_possible = 4; // front , back and turn right 15 degrees, turn left 15 degrees
+
+	/*
+	x_moves = new int[4] {0,0,0,0};
+	y_moves = new int[4] {1,-1,0,0};
+	angle_moves = new int[4] {0,0,angle_tolerance_astar,-1*angle_tolerance_astar};
+	*/
+	// till here A star variables
+
+
 	// here my own
 	ROS_INFO("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
 	std::cout << name << std::endl;
@@ -396,4 +497,233 @@ void MotionPrimitivesGlobalPlanner::initialize(std::string name,
 
 
 }
+
+
+/*
+bool MotionPrimitivesGlobalPlanner::Compare::operator<(const node_a_star& node_compare_one, const node_a_star& node_compare_two)
+{
+	return node_compare_one.getF() > node_compare_two.getF();
+}
+*/
+/*
+bool cmp::operator()(const node_a_star& node_compare_one, const node_a_star& node_compare_two)
+{
+	return node_compare_one.getF() < node_compare_two.getF();
+}
+*/
+
+
+// below is the definition of the function for A star algo
+std::string MotionPrimitivesGlobalPlanner::PathFindAStar( const int StartPosX, const int StartPosY, const double StartPosYaw, const int GoalPosX, const int GoalPosY, const double GoalPosYaw )
+{
+
+	//static std::priority_queue<node_a_star, std::vector<node_a_star>, cmp> pq[2]; // list of open (not-yet-tried) nodes
+    static std::priority_queue<node_a_star> pq[2]; // list of open (not-yet-tried) nodes
+    static int pqi=0; // pq index
+    static node_a_star* n0;
+    static node_a_star* n0start;
+    static node_a_star* m0;
+    static int i, j, x_nodes_astar, y_nodes_astar, angle_node_astar, angle_index_nodes_astar, x_next_child, y_next_child, angle_next_child;
+    static int action_taken_step, action_backwards;
+    static char c;
+
+
+
+    const int mymap_x_size = mycostmap_ros->getCostmap()->getSizeInCellsX();
+
+    const int mymap_y_size = mycostmap_ros->getCostmap()->getSizeInCellsY();
+    const int node_size_angle_steps_total = angle_steps_total;
+
+
+    static int StartPosYaw_discritized = ((int) StartPosYaw ) % 360;
+    static int GoalPosYaw_discritized = ((int) GoalPosYaw) % 360;
+    // Now rounding off to nearest step 
+    StartPosYaw_discritized = ( ((StartPosYaw_discritized + angle_tolerance_astar/2) / angle_tolerance_astar) * angle_tolerance_astar ) % 360;
+    GoalPosYaw_discritized = ( ((GoalPosYaw_discritized + angle_tolerance_astar/2) / angle_tolerance_astar) * angle_tolerance_astar ) % 360;
+
+
+    // Here n = costmap_ros->getCostmap()->getSizeInCellsX() 
+    // m = costmap_ros->getCostmap()->getSizeInCellsY() 
+    /*
+    int * a_star_closed_nodes = new int [mymap_x_size][mymap_y_size][node_size_angle_steps_total]; 
+    int * a_star_open_nodes = new int [mymap_x_size][mymap_y_size][node_size_angle_steps_total]; 
+    int * a_star_action_history = new int [mymap_x_size][mymap_y_size][node_size_angle_steps_total]; 
+
+    // reset the node maps
+    for(y_nodes_astar=0;y_nodes_astar<mymap_y_size;y_nodes_astar++)
+    {
+        for(x_nodes_astar=0;x_nodes_astar<mymap_x_size;x_nodes_astar++)
+        {
+            for(angle_index_nodes_astar=0;angle_index_nodes_astar<angle_steps_total;angle_index_nodes_astar++)
+            {
+                a_star_closed_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar]=0;
+                a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar]=0;
+            }
+        }
+    }
+	*/
+
+	std::vector<std::vector<std::vector<int> > > a_star_closed_nodes(mymap_x_size, std::vector<std::vector<int> > (mymap_y_size, std::vector<int>(angle_steps_total,0)));
+	std::vector<std::vector<std::vector<int> > > a_star_open_nodes(mymap_x_size, std::vector<std::vector<int> > (mymap_y_size, std::vector<int>(angle_steps_total,0)));
+	std::vector<std::vector<std::vector<int> > > a_star_action_history(mymap_x_size, std::vector<std::vector<int> > (mymap_y_size, std::vector<int>(angle_steps_total,0)));
+
+
+    	static int x_moves[] = {0,0,0,0};
+	static int y_moves[] = {1,-1,0,0};
+	static int angle_moves[] = {0,0,angle_tolerance_astar,-1*angle_tolerance_astar};
+
+
+
+    // create the start node and push into list of open nodes
+    n0start=new node_a_star(StartPosX, StartPosY, StartPosYaw_discritized, 0, 0);
+    n0start->updateF(GoalPosX, GoalPosY,GoalPosYaw_discritized);
+    pq[pqi].push(*n0start);
+    a_star_open_nodes[mymap_x_size-1][mymap_y_size-1][angle_steps_total-1]=n0start->getF(); // mark it on the open nodes map
+
+    // A* search
+    while(!pq[pqi].empty())
+    {
+        // get the current node w/ the highest priority
+        // from the list of open nodes
+
+        n0=new node_a_star( pq[pqi].top().getx(), pq[pqi].top().gety(), pq[pqi].top().getangle(), pq[pqi].top().getG(), pq[pqi].top().getF());
+
+        x_nodes_astar=n0->getx(); y_nodes_astar=n0->gety(); angle_node_astar=n0->getangle(); angle_index_nodes_astar= n0->getangle() / angle_tolerance_astar;
+
+        pq[pqi].pop(); // remove the node from the open list
+        a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar]=0;
+        // mark it on the closed nodes map
+        a_star_closed_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar]=1;
+
+        // quit searching when the goal state is reached
+        // if((*n0).estimate(xFinish, yFinish) == 0)
+        if( x_nodes_astar==GoalPosX && y_nodes_astar==GoalPosY && angle_node_astar==GoalPosYaw_discritized ) 
+        {
+            std::cout << " GoalPosX and GoalPosY reached \n";
+
+            // generate the path from finish to start
+            // by following the directions
+            std::string path="";
+            while(!(x_nodes_astar==StartPosX && y_nodes_astar==StartPosY && angle_node_astar==StartPosYaw_discritized ))
+            {
+                // 
+                // the action that was taken to reach this node
+                action_taken_step = a_star_action_history[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar];
+                if (action_taken_step == 0)
+                {   // robot would have moved upwards ... the parent node is then one downwards
+                    c = '0'+1;
+                    action_backwards = 1;
+                } else if (action_taken_step == 1)
+                {   // robot would have moved downwards ... the parent node is then one upwards
+                    c = '0'+0;
+                    action_backwards = 0;
+                } else if (action_taken_step == 2)
+                {   // robot would have rotated right ... the parent node is then one rotation left
+                    c = '0'+3;
+                    action_backwards = 3;
+                } else if (action_taken_step == 3)
+                {   // robot would have rotated right ... the parent node is then one rotation left
+                    c = '0'+2;
+                    action_backwards = 2;
+                } 
+
+                path=c+path;
+                x_nodes_astar += x_moves[action_backwards];
+                y_nodes_astar += y_moves[action_backwards];
+                angle_node_astar = ( angle_node_astar + angle_moves[i] ) % 360;
+                if(angle_node_astar < 0)
+                {   angle_node_astar = (angle_node_astar + 360) % 360;  }
+                // 
+            }
+
+            // garbage collection
+            delete n0;
+            // empty the leftover nodes
+            while(!pq[pqi].empty()) pq[pqi].pop();           
+            return path;
+            
+        }
+
+        // generate moves (child nodes) in all possible directions
+        for(i=0;i<moves_possible;i++)
+        {
+
+            x_next_child = x_nodes_astar + x_moves[i];
+            y_next_child = y_nodes_astar + y_moves[i];
+            angle_next_child = ( angle_node_astar + angle_moves[i] ) % 360;
+            if(angle_next_child < 0)
+            {   angle_next_child = (angle_next_child + 360) % 360;  }
+
+            // TODO: here send the x and y coordinates of the possible robot position to the file MotionPrimitiesGlobalPlanner.cpp 
+            // use MotionPrimitivesGlobalPlanner::give_robot_cells_from_map_coordinates(x_next_child,y_next_child,angle_next_child) to get cells occupied by the robot and then 
+            // robot_obstacle_not_hit = MotionPrimitivesGlobalPlanner::give_robot_cost(const std::vector<costmap_2d::MapLocation> robot_grid_cells, int &total_cost_current_position )
+            static bool robot_obstacle_not_hit = true;
+
+            std::vector<costmap_2d::MapLocation> mcells_occupied_by_robot_next_child = give_robot_cells_from_map_coordinates(x_next_child, y_next_child, angle_next_child );
+            int cost_next_move_total;
+            robot_obstacle_not_hit = give_robot_cost(mcells_occupied_by_robot_next_child, cost_next_move_total );
+
+
+
+            if(!(x_next_child<0 || x_next_child>mymap_x_size-1 || y_next_child<0 || y_next_child>mymap_y_size-1 || robot_obstacle_not_hit 
+                || a_star_closed_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar  / angle_tolerance_astar]==1) )
+            {
+                // generate a child node
+                m0=new node_a_star( x_next_child, y_next_child, angle_next_child, n0->getG(), n0->getF());
+
+                m0->nextG(i);
+                m0->updateF(GoalPosX, GoalPosY, GoalPosYaw_discritized);
+
+                // if it is not in the open list then add into that
+                if( a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar]==0)
+                {
+                    a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar]=m0->getF();
+                    pq[pqi].push(*m0);
+                    // save the action taken at this step 
+                    a_star_action_history[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar]=i;
+                }
+                else if(a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar] > m0->getF())
+                {
+                    // update the priority info
+                    a_star_open_nodes[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar] = m0->getF();
+                    // save the action taken at this step 
+                    a_star_action_history[x_nodes_astar][y_nodes_astar][angle_index_nodes_astar / angle_tolerance_astar]=i;
+
+                    // replace the node
+                    // by emptying one pq to the other one
+                    // except the node to be replaced will be ignored
+                    // and the new node will be pushed in instead
+
+
+                    while(!(pq[pqi].top().getx()==x_nodes_astar && pq[pqi].top().gety()==y_nodes_astar && 
+                        pq[pqi].top().getangle()==angle_index_nodes_astar ))
+                    {                
+                        pq[1-pqi].push(pq[pqi].top());
+                        pq[pqi].pop();       
+                    }
+                    pq[pqi].pop(); // remove the wanted node
+                    
+                    // empty the larger size pq to the smaller one
+                    if(pq[pqi].size()>pq[1-pqi].size()) pqi=1-pqi;
+                    while(!pq[pqi].empty())
+                    {                
+                        pq[1-pqi].push(pq[pqi].top());
+                        pq[pqi].pop();       
+                    }
+                    pqi=1-pqi;
+                    pq[pqi].push(*m0); // add the better node instead
+                }
+                else delete m0; // garbage collection
+            }
+        }
+        delete n0; // garbage collection
+    }
+    delete n0start;
+
+
+
+
+    return ""; // no route found
+}
+
 }
