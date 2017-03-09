@@ -10,9 +10,67 @@
 
 #include <nav_core/base_global_planner.h>
 
-namespace motion_primitives_global_planner
+
+#include <queue>
+#include <string>
+#include <math.h>
+#include <ctime>
+#include <cstdlib>
+#include <vector>
+
+
+// Node of A star
+class node_a_star
 {
 
+    public:
+        node_a_star(int xpos, int ypos, int angle_pos, int g_start, int f_start);
+        virtual ~node_a_star();
+    
+        int getx() const;
+        int gety() const;       
+        int getangle() const;
+        int getG() const;
+        int getF() const;
+
+        void updateF(const int target_x, const int target_y, const int target_angle_yaw);
+
+        void nextG(const int intended_dir);
+        
+        // Estimation function for the remaining distance to the goal.
+        int get_h_val(const int x_tgt, const int y_tgt, const int target_angle_yaw)  const;
+
+        // for priority queue
+        //friend bool operator< (const node_a_star& node_compare_one, const node_a_star& node_compare_two);
+        // Determine priority (in the priority queue)
+		bool operator<(const node_a_star& node_first_cmp) const;
+
+    private:
+	    // current position
+	    int x_cord;
+	    int y_cord;
+	    int angle_cord;
+	    // variables for A STAR
+	    int G_val;
+	    int F_val;
+	    int angle_tolerance_node;
+
+};
+
+
+
+
+
+namespace motion_primitives_global_planner
+{
+/*
+class cmp
+{
+	public:
+	    bool operator()(const node_a_star& node_compare_one, const node_a_star& node_compare_two);
+
+};
+*/
 class MotionPrimitivesGlobalPlanner: public nav_core::BaseGlobalPlanner
 {
 public:
@@ -42,18 +100,49 @@ public:
 
 	std::vector<costmap_2d::MapLocation> give_robot_cells(const geometry_msgs::PoseStamped start);
 	bool give_robot_cost(const std::vector<costmap_2d::MapLocation> robot_grid_cells, int &total_cost_current_position );
+	std::vector<costmap_2d::MapLocation> give_robot_cells_from_map_coordinates(const int x_map_possible, const int y_map_possible, const int angle_map_possible );
 
+	// A-star algorithm.
+	// The route returned is a string of direction digits.
+	std::string PathFindAStar( const int StartPosX, const int StartPosY, const double StartPosYaw, const int GoalPosX, const int GoalPosY, const double GoalPosYaw );
 
-
+	// Determine priority (in the priority queue)
+	/*
+	class Compare
+	{
+		public:
+		    bool operator<(const node_a_star& node_compare_one, const node_a_star& node_compare_two);
+	};
+	*/
+	//friend bool operator< (const node_a_star& node_compare_one, const node_a_star& node_compare_two);
+   
 
 private:
 	costmap_2d::Costmap2DROS* mycostmap_ros;
 
-	const int theta_tolerance = 15; 	// if robot is 15 degrees near to goal, then it is acceptable
-	const double cost_simle_movement = 1.0;
-	const double cost_angular_movement = 1.0;
+
+	// variables for A star below ... these will be initialized in initialization func 
+	static int angle_tolerance_astar;
+	int angle_steps_total;
+	static int moves_possible;
+
+	/*
+	static int* x_moves;
+	static int* y_moves;
+	static int* angle_moves;
+	*/
+
+
 
 
 };
 }
+
+
+
+
+
+
+
+
 #endif /* SRC_MOTIONPRIMITIVESGLOBALPLANNER_H_ */
